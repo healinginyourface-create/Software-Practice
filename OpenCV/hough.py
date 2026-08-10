@@ -43,7 +43,7 @@ lines = cv2.HoughLinesP(
     roi,
     rho=1,
     theta=np.pi / 180,
-    threshold=50,
+    threshold=10,
     minLineLength=50,
     maxLineGap=50
 )

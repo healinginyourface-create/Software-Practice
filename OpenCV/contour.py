@@ -39,7 +39,7 @@ for contour in contours:
     area = cv2.contourArea(contour)
 
     # 작은 영역 제거
-    if area < 500:
+    if area < 150:
         continue
 
     count += 1
