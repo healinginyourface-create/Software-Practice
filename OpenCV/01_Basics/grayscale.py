@@ -2,8 +2,8 @@ import cv2
 import matplotlib.pyplot as plt
 import os
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-image_path = os.path.join(BASE_DIR, "car.jpg")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+image_path = os.path.join(BASE_DIR, "assets", "car.jpg")
 
 image = cv2.imread(image_path)
 
