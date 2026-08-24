@@ -1,100 +1,134 @@
 import cv2
 import os
 
+
 # 현재 파일 위치
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # OpenCV 폴더
 OPENCV_DIR = os.path.dirname(CURRENT_DIR)
 
-# 이미지 경로
-image_path = os.path.join(
+# 영상 경로
+video_path = os.path.join(
     OPENCV_DIR,
     "assets",
-    "car.jpg"
+    "drivingvideo.mp4"
 )
 
-# 이미지 읽기
-image = cv2.imread(image_path)
 
-if image is None:
-    print("이미지를 찾을 수 없습니다.")
-    print(f"확인한 경로: {image_path}")
+# 영상 읽기
+video = cv2.VideoCapture(video_path)
+
+if not video.isOpened():
+    print("영상을 찾을 수 없습니다.")
+    print(f"확인한 경로: {video_path}")
     exit()
 
-print("이미지 불러오기 성공")
-print(f"이미지 크기: {image.shape}")
+print("영상 불러오기 성공")
 
 
-# 1. Grayscale
-gray = cv2.cvtColor(
-    image,
-    cv2.COLOR_BGR2GRAY
-)
+# ============================
+# 영상 처리
+# ============================
+
+while True:
+
+    # 프레임 읽기
+    ret, frame = video.read()
+
+    if not ret:
+        break
 
 
-# 2. Threshold
-_, binary = cv2.threshold(
-    gray,
-    120,
-    255,
-    cv2.THRESH_BINARY
-)
+    # 1. Grayscale
+
+    gray = cv2.cvtColor(
+        frame,
+        cv2.COLOR_BGR2GRAY
+    )
 
 
-# 3. Contour 검출
-contours, _ = cv2.findContours(
-    binary,
-    cv2.RETR_EXTERNAL,
-    cv2.CHAIN_APPROX_SIMPLE
-)
+    # 2. Threshold
 
-print(f"검출된 Contour: {len(contours)}")
+    _, binary = cv2.threshold(
+        gray,
+        120,
+        255,
+        cv2.THRESH_BINARY
+    )
 
 
-# 4. 큰 Contour만 Bounding Box 표시
-object_count = 0
+    # 3. Contour 검출
 
-for contour in contours:
+    contours, _ = cv2.findContours(
+        binary,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE
+    )
 
-    area = cv2.contourArea(contour)
 
-    # 너무 작은 영역 제거
-    if area < 1000:
-        continue
+    # 4. 큰 Contour만 Bounding Box 표시
 
-    x, y, w, h = cv2.boundingRect(contour)
+    object_count = 0
 
-    # Bounding Box
-    cv2.rectangle(
-        image,
-        (x, y),
-        (x + w, y + h),
+    for contour in contours:
+
+        area = cv2.contourArea(contour)
+
+        # 너무 작은 영역 제거
+        if area < 100:
+            continue
+
+
+        x, y, w, h = cv2.boundingRect(
+            contour
+        )
+
+
+        # Bounding Box
+
+        cv2.rectangle(
+            frame,
+            (x, y),
+            (x + w, y + h),
+            (0, 255, 0),
+            2
+        )
+
+
+        object_count += 1
+
+
+    # 객체 수 표시
+
+    cv2.putText(
+        frame,
+        f"Objects: {object_count}",
+        (20, 40),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1,
         (0, 255, 0),
         2
     )
 
-    object_count += 1
 
-    print(
-        f"객체 {object_count}: "
-        f"위치=({x}, {y}), "
-        f"크기=({w}, {h}), "
-        f"면적={area:.1f}"
+    # 결과 화면
+
+    cv2.imshow(
+        "Object Detection",
+        frame
     )
 
 
-# 5. 결과 저장
-output_path = os.path.join(
-    CURRENT_DIR,
-    "detected.jpg"
-)
+    # 속도 조절 + Q 종료
 
-cv2.imwrite(
-    output_path,
-    image
-)
+    if cv2.waitKey(30) & 0xFF == ord("q"):
+        break
 
-print()
-print(f"검출된 객체 수: {object_count}")
-print(f"결과 저장 위치: {output_path}")
+
+# 종료
+
+video.release()
+cv2.destroyAllWindows()
+
+print("Object Detection 종료")
