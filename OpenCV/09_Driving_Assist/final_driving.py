@@ -114,6 +114,226 @@ def detect_lane(frame):
 
     height, width = edges.shape
 
+    # --------------------------------------------------------
+    # ROI
+    # --------------------------------------------------------
+
+    mask = np.zeros_like(edges)
+
+    polygon = np.array([
+        [
+            (0, height),
+            (width, height),
+            (
+                int(width * 0.60),
+                int(height * 0.55)
+            ),
+            (
+                int(width * 0.40),
+                int(height * 0.55)
+            )
+        ]
+    ], dtype=np.int32)
+
+    cv2.fillPoly(
+        mask,
+        polygon,
+        255
+    )
+
+    roi = cv2.bitwise_and(
+        edges,
+        mask
+    )
+
+    # --------------------------------------------------------
+    # Hough Transform
+    # --------------------------------------------------------
+
+    lines = cv2.HoughLinesP(
+        roi,
+        1,
+        np.pi / 180,
+        threshold=30,
+        minLineLength=40,
+        maxLineGap=20
+    )
+
+    result = frame.copy()
+
+    lane_lines = []
+
+    if lines is not None:
+
+        for line in lines:
+
+            line = np.asarray(
+                line
+            ).reshape(-1)
+
+            if len(line) != 4:
+                continue
+
+            x1, y1, x2, y2 = line
+
+            if x2 == x1:
+                continue
+
+            slope = (
+                (y2 - y1)
+                /
+                (x2 - x1)
+            )
+
+            # 너무 수평인 선 제거
+            if abs(slope) < 0.5:
+                continue
+
+            lane_lines.append(
+                (x1, y1, x2, y2)
+            )
+
+            cv2.line(
+                result,
+                (
+                    int(x1),
+                    int(y1)
+                ),
+                (
+                    int(x2),
+                    int(y2)
+                ),
+                (0, 255, 0),
+                3
+            )
+
+    return result, lane_lines
+# ============================================================
+# 6-1. 차선 중앙 위치 계산
+# ============================================================
+
+def calculate_lane_center(
+    lane_lines,
+    frame_width,
+    frame_height
+):
+
+    left_lines = []
+    right_lines = []
+
+    for line in lane_lines:
+
+        x1, y1, x2, y2 = line
+
+        slope = (
+            (y2 - y1)
+            /
+            (x2 - x1)
+        )
+
+        # 왼쪽 차선
+        if slope < 0:
+            left_lines.append(line)
+
+        # 오른쪽 차선
+        elif slope > 0:
+            right_lines.append(line)
+
+
+    # 왼쪽 차선이 없거나 오른쪽 차선이 없으면 판단 불가
+    if not left_lines or not right_lines:
+        return None
+
+
+    # --------------------------------------------------------
+    # 가장 아래쪽(y = frame_height)에서
+    # 각 차선이 위치하는 x 좌표 계산
+    # --------------------------------------------------------
+
+    def get_x_at_bottom(line):
+
+        x1, y1, x2, y2 = line
+
+        slope = (
+            (y2 - y1)
+            /
+            (x2 - x1)
+        )
+
+        intercept = y1 - slope * x1
+
+        x = (
+            frame_height - intercept
+        ) / slope
+
+        return x
+
+
+    left_x = np.mean([
+        get_x_at_bottom(line)
+        for line in left_lines
+    ])
+
+
+    right_x = np.mean([
+        get_x_at_bottom(line)
+        for line in right_lines
+    ])
+
+
+    # --------------------------------------------------------
+    # 차선 중앙
+    # --------------------------------------------------------
+
+    lane_center = (
+        left_x + right_x
+    ) / 2
+
+
+    # --------------------------------------------------------
+    # 차량(화면) 중앙
+    # --------------------------------------------------------
+
+    vehicle_center = (
+        frame_width / 2
+    )
+
+
+    # --------------------------------------------------------
+    # 중앙에서 얼마나 벗어났는지
+    # --------------------------------------------------------
+
+    offset = (
+        vehicle_center - lane_center
+    )
+
+
+    # --------------------------------------------------------
+    # 상태 판단
+    # --------------------------------------------------------
+
+    tolerance = frame_width * 0.05
+
+
+    if abs(offset) <= tolerance:
+
+        status = "CENTER"
+
+    elif offset > 0:
+
+        status = "LEFT"
+
+    else:
+
+        status = "RIGHT"
+
+
+    return (
+        lane_center,
+        vehicle_center,
+        offset,
+        status
+    )
 
     # --------------------------------------------------------
     # ROI
@@ -416,7 +636,69 @@ while True:
     result_frame, lane_lines = detect_lane(
         frame
     )
+    lane_info = calculate_lane_center(
+        lane_lines,
+        width,
+        height
+    )
 
+    if lane_info is not None:
+
+        (
+            lane_center,
+            vehicle_center,
+            lane_offset,
+            lane_status
+        ) = lane_info
+
+        # 차선 중앙 표시
+        cv2.circle(
+            result_frame,
+            (
+                int(lane_center),
+                height - 80
+            ),
+            8,
+            (0, 255, 255),
+            -1
+        )
+
+        # 차량 중앙 표시
+        cv2.line(
+            result_frame,
+            (
+                int(vehicle_center),
+                height - 120
+            ),
+            (
+                int(vehicle_center),
+                height
+            ),
+            (255, 255, 255),
+            2
+        )
+
+        # 차선 상태
+        cv2.putText(
+            result_frame,
+            f"LANE: {lane_status}",
+            (30, 50),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1,
+            (255, 255, 255),
+            2
+        )
+
+        # 오프셋
+        cv2.putText(
+            result_frame,
+            f"OFFSET: {lane_offset:.0f}px",
+            (30, 90),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (255, 255, 255),
+            2
+        )
 
     # ========================================================
     # B. YOLO Tracking
